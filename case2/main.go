@@ -11,19 +11,6 @@ const (
 	SubContextTimeOut    = 5
 )
 
-// Shortcut for time.Sleep()
-var wait = func(n time.Duration) {
-	time.Sleep(n * time.Second)
-}
-
-// Runtime visual representation
-var printWithSleep = func() {
-	for i := 1; i < ParentContextTimeOut+5; i++ {
-		wait(1)
-		fmt.Printf("Time passed: %vs\t\n", i)
-	}
-}
-
 // Parent function that start main context.
 // This is where the countdown starts.
 func parentGoRoutine() {
@@ -42,7 +29,7 @@ func parentGoRoutine() {
 			fmt.Println("parentGoRoutine ended: ", ctx.Err())
 			return
 		default:
-			wait(1)
+			time.Sleep(50 * time.Millisecond)
 		}
 	}
 }
@@ -50,30 +37,39 @@ func parentGoRoutine() {
 func subGoRoutine(parentCtx context.Context) {
 	// Add extra time before we start context
 	// to emulate subcontext strating late
-	wait(8)
+	time.Sleep(8 * time.Second)
 
 	fmt.Printf("started subGoRoutine with timeout %v\n", SubContextTimeOut)
 	// This context inherits parent's context
 	// Which means it should comlpete the job in that time window `ParentContextTimeOut`
-	// If sub goroutine can not make it in time of parent's goroutine
-	// It gets a `context deadline exceeded` error and shuts down
-	// But main goroutine continues to go on
+
+	// If sub goroutine can not make it in time
+	// it gets a `context deadline exceeded` error and shuts down
+	// but parent's goroutine continues to go on
 
 	ctx, cancel := context.WithTimeout(parentCtx, SubContextTimeOut*time.Second)
 	defer cancel()
 
+	err := slowDBQuery(ctx)
+	fmt.Println("subGoRoutine ended: ", err)
+}
+
+// Note: no cancel func here, we need only ctx
+func slowDBQuery(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("subGoRoutine ended: ", ctx.Err())
-			return
+			return ctx.Err()
 		default:
-			wait(1)
+			time.Sleep(50 * time.Millisecond)
 		}
 	}
 }
 
 func main() {
 	go parentGoRoutine()
-	printWithSleep()
+	for i := 1; i <= ParentContextTimeOut+5; i++ {
+		time.Sleep(1 * time.Second)
+		fmt.Printf("Time passed: %vs\t\n", i)
+	}
 }
